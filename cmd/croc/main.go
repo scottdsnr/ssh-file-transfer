@@ -21,6 +21,9 @@ import (
 // DefaultRelay is used when neither --relay nor CROC_GO_RELAY is set.
 const DefaultRelay = "localhost:9009"
 
+// version is stamped in at build time by the release workflow.
+var version = "dev"
+
 func main() {
 	log.SetFlags(0)
 	if len(os.Args) < 2 {
@@ -39,6 +42,9 @@ func main() {
 	case "-h", "--help", "help":
 		usage()
 		return
+	case "-v", "--version", "version":
+		fmt.Println("croc-go", version)
+		return
 	default:
 		usage()
 		os.Exit(2)
@@ -56,6 +62,7 @@ Usage:
   croc-go send [--relay ADDR] [--code CODE] [--direct] [--tunnel] <path>...
   croc-go receive [--relay ADDR] [--out DIR] [--yes] [--force] [CODE]
   croc-go relay [--listen :9009] [--ws]
+  croc-go version
 
 The sender prints a code; type that same code on the receiver. The code is
 never sent over the network, so the relay cannot read your files.

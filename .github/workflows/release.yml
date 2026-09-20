@@ -1,0 +1,52 @@
+# Cross-compiles croc for every platform we support and attaches the binaries
+# to a GitHub release, so end users never need a Go toolchain.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - run: make smoke
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build every target
+        run: |
+          version="${GITHUB_REF_NAME:-dev}"
+          mkdir -p dist
+          # Names match what scripts/get-croc.sh expects: croc_<os>-<arch>.
+          for target in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64; do
+            os="${target%-*}"; arch="${target#*-}"
+            out="dist/croc_${target}"
+            [ "$os" = windows ] && out="$out.exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$out" ./cmd/croc
+          done
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -4,14 +4,38 @@
 encrypted end to end (SPAKE2 over the code, ChaCha20-Poly1305 for the data).
 The code never crosses the network, so no rendezvous point can read the files.
 
-## Requirements
+## Install (end users)
+
+No Go, no compiler, no checkout — grab a prebuilt binary:
+
+    curl -fsSL https://raw.githubusercontent.com/scottdsnr/ssh-file-transfer/master/scripts/get-croc.sh | sh
+
+Add `-s -- --with-cloudflared` to also install cloudflared, which is what lets
+`croc send --tunnel` work from anywhere:
+
+    curl -fsSL .../get-croc.sh | sh -s -- --with-cloudflared
+
+It detects your OS and CPU (Linux, macOS and Windows; x86-64 and arm64),
+verifies the published SHA-256, and installs to `~/.local/bin`. Use
+`--prefix DIR` to put it elsewhere and `--version vX.Y.Z` to pin a release.
+Binaries are also downloadable by hand from the
+[releases page](https://github.com/scottdsnr/ssh-file-transfer/releases).
+
+Then send something:
+
+    croc send --tunnel myfile.zip     # works over the internet
+    croc send --direct myfile.zip     # same network only, no cloudflared
+
+croc prints one command line; the other person runs it. That's the whole flow.
+
+## Requirements (building from source)
 
 - Go 1.27.1 or newer (the only build dependency; the code itself uses just the
   standard library plus `golang.org/x/crypto`).
 - `cloudflared`, on the sending machine only, and only for `--tunnel`. No
   Cloudflare account needed.
 
-## Install
+## Install from source
 
     ./scripts/install.sh                     # build, test, install to ~/.local/bin
     ./scripts/install.sh --with-cloudflared  # also fetch cloudflared, for --tunnel
