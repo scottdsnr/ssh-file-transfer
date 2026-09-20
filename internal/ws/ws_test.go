@@ -148,3 +148,19 @@ func TestNetConnSemantics(t *testing.T) {
 		t.Fatal("expected the read deadline to fire")
 	}
 }
+
+// TestAcceptTokenMatchesRFC pins the handshake token against the worked
+// example in RFC 6455 section 1.3. Both of our own peers derive the token the
+// same way, so only an outside reference catches a wrong GUID -- which is
+// exactly what broke transfers through a Cloudflare tunnel while every local
+// test passed.
+func TestAcceptTokenMatchesRFC(t *testing.T) {
+	const (
+		key  = "dGhlIHNhbXBsZSBub25jZQ=="
+		want = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+	)
+	got := ws.AcceptToken(key)
+	if got != want {
+		t.Fatalf("accept token = %q, want %q", got, want)
+	}
+}

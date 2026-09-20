@@ -23,8 +23,10 @@ import (
 	"time"
 )
 
-// magic is the GUID RFC 6455 mixes into the handshake accept token.
-const magic = "258EAFA5-E914-47DA-95CA-5AB0DC85B31D"
+// magic is the GUID RFC 6455 mixes into the handshake accept token. Its exact
+// value matters: any third-party client, such as a Cloudflare edge proxying a
+// tunnel, checks the token we derive from it and hangs up on a mismatch.
+const magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 // Opcodes we care about. Text frames are never produced and rejected on read.
 const (
@@ -113,7 +115,7 @@ func Dial(rawURL string, timeout time.Duration) (*Conn, error) {
 		raw.Close()
 		return nil, fmt.Errorf("ws: server answered %s", resp.Status)
 	}
-	if resp.Header.Get("Sec-WebSocket-Accept") != acceptToken(clientKey) {
+	if resp.Header.Get("Sec-WebSocket-Accept") != AcceptToken(clientKey) {
 		raw.Close()
 		return nil, errors.New("ws: server returned a bad accept token")
 	}
@@ -144,7 +146,7 @@ func Accept(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 	}
 	resp := "HTTP/1.1 101 Switching Protocols\r\n" +
 		"Upgrade: websocket\r\nConnection: Upgrade\r\n" +
-		"Sec-WebSocket-Accept: " + acceptToken(key) + "\r\n\r\n"
+		"Sec-WebSocket-Accept: " + AcceptToken(key) + "\r\n\r\n"
 	if _, err := io.WriteString(raw, resp); err != nil {
 		raw.Close()
 		return nil, err
@@ -156,7 +158,9 @@ func Accept(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 	return &Conn{Conn: raw, br: buf.Reader}, nil
 }
 
-func acceptToken(clientKey string) string {
+// AcceptToken derives the Sec-WebSocket-Accept value for a client key. It is
+// exported so a test can check it against the RFC's worked example.
+func AcceptToken(clientKey string) string {
 	sum := sha1.Sum([]byte(clientKey + magic))
 	return base64.StdEncoding.EncodeToString(sum[:])
 }
