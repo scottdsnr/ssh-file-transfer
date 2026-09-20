@@ -25,7 +25,7 @@ type SendOptions struct {
 // Send builds a manifest from paths, waits for a receiver on the code, and
 // streams the files once the receiver accepts.
 func Send(opts SendOptions) error {
-	manifest, sources, err := buildManifest(opts.Paths)
+	manifest, sources, err := BuildFileList(opts.Paths)
 	if err != nil {
 		return err
 	}
@@ -108,9 +108,11 @@ func sendFile(c *comm.Conn, cipher *crypt.Cipher, path string, sentSoFar, total 
 	return sent, sendEncrypted(c, cipher, []byte{frameEnd})
 }
 
-// buildManifest expands the given paths (walking directories) into the
-// manifest plus the matching on-disk source paths.
-func buildManifest(paths []string) (Manifest, []string, error) {
+// BuildFileList expands the given paths (walking directories) into the
+// manifest plus the matching on-disk source paths. It is exported because the
+// browser download page offers the same set of files without running the
+// peer-to-peer protocol at all.
+func BuildFileList(paths []string) (Manifest, []string, error) {
 	var m Manifest
 	var sources []string
 	if len(paths) == 0 {

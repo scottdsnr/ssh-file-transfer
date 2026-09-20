@@ -29,6 +29,7 @@ type Server struct {
 	mu      sync.Mutex
 	waiting map[string]*comm.Conn
 	log     *log.Logger
+	extra   http.Handler
 }
 
 func NewServer(logger *log.Logger) *Server {
@@ -152,6 +153,10 @@ func pipe(a, b net.Conn) {
 // through it untouched.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != ws.DefaultPath {
+		if s.extra != nil {
+			s.extra.ServeHTTP(w, r)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -165,8 +170,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ListenAndServeHTTP runs the WebSocket flavour of the relay. The returned
 // listener address is reported through ready, which lets a caller that asked
-// for port 0 learn the port that was actually chosen.
-func (s *Server) ListenAndServeHTTP(addr string, ready func(net.Addr)) error {
+// for port 0 learn the port that was actually chosen. Requests outside the
+// relay's own path go to extra, if one is given.
+func (s *Server) ListenAndServeHTTP(addr string, extra http.Handler, ready func(net.Addr)) error {
+	s.extra = extra
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err

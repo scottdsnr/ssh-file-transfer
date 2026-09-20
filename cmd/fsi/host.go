@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
@@ -19,7 +20,10 @@ import (
 // plus the port it bound, so a transfer needs no public relay at all. The
 // sender is its own rendezvous point: it connects to this relay like any other
 // peer, which keeps the pairing and encryption paths identical.
-func serve(listen string) (localURL string, port int, err error) {
+//
+// extra, when non-nil, handles every request the relay does not, which is how
+// the browser download page rides on the same port (and the same tunnel).
+func serve(listen string, extra http.Handler) (localURL string, port int, err error) {
 	logger := log.New(io.Discard, "", 0)
 	if os.Getenv("FSI_DEBUG") != "" {
 		logger = log.New(os.Stderr, "relay: ", log.LstdFlags)
@@ -28,7 +32,7 @@ func serve(listen string) (localURL string, port int, err error) {
 	addrs := make(chan net.Addr, 1)
 	errs := make(chan error, 1)
 	go func() {
-		errs <- relay.NewServer(logger).ListenAndServeHTTP(listen, func(a net.Addr) { addrs <- a })
+		errs <- relay.NewServer(logger).ListenAndServeHTTP(listen, extra, func(a net.Addr) { addrs <- a })
 	}()
 
 	select {
@@ -49,10 +53,10 @@ func serve(listen string) (localURL string, port int, err error) {
 var quickTunnelURL = regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
 
 // tunnel exposes a locally hosted relay through a Cloudflare quick tunnel and
-// returns the public URL a receiver should use. Quick tunnels need no
+// returns the public origin (scheme and host, no path) it is reachable at. Quick tunnels need no
 // Cloudflare account, but they do need the cloudflared binary on this machine
 // and Cloudflare offers them with no uptime guarantee.
-func tunnel(port int) (publicURL string, stop func(), err error) {
+func tunnel(port int) (origin string, stop func(), err error) {
 	bin, err := exec.LookPath("cloudflared")
 	if err != nil {
 		return "", nil, fmt.Errorf("cloudflared is not installed; install it or drop --tunnel and share the address yourself")
@@ -94,7 +98,7 @@ func tunnel(port int) (publicURL string, stop func(), err error) {
 
 	select {
 	case host := <-found:
-		return host + ws.DefaultPath, stop, nil
+		return host, stop, nil
 	case <-time.After(30 * time.Second):
 		stop()
 		return "", nil, fmt.Errorf("cloudflared did not report a tunnel hostname within 30s")

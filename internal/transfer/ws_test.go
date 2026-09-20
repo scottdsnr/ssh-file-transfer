@@ -81,7 +81,7 @@ func TestRelayOnlySpeaksItsOwnPath(t *testing.T) {
 // when it hosts the rendezvous for a tunnel.
 func TestListenAndServeHTTPReportsItsPort(t *testing.T) {
 	addrs := make(chan net.Addr, 1)
-	go relay.NewServer(log.New(io.Discard, "", 0)).ListenAndServeHTTP("127.0.0.1:0", func(a net.Addr) { addrs <- a })
+	go relay.NewServer(log.New(io.Discard, "", 0)).ListenAndServeHTTP("127.0.0.1:0", nil, func(a net.Addr) { addrs <- a })
 
 	select {
 	case a := <-addrs:

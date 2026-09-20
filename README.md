@@ -25,6 +25,7 @@ Then send something:
 
     fsi send --tunnel myfile.zip     # works over the internet
     fsi send --direct myfile.zip     # same network only, no cloudflared
+    fsi send --web --tunnel myfile.zip  # recipient just opens a link in a browser
 
 fsi prints one command line; the other person runs it. That's the whole flow.
 
@@ -73,6 +74,31 @@ tunnel hostname is random, so the receiver needs the printed `--relay` URL in
 addition to the code — that is the price of having no server to shorten it.
 Cloudflare offers quick tunnels with no uptime guarantee.
 
+## Browser recipients: no terminal needed
+
+Some recipients cannot run a command at all. `--web` serves a small download
+page from the sending machine — still serverless, still nothing but your
+machine hosting it — so they just open a link and click.
+
+    fsi send --web --tunnel report.pdf photos/
+    # prints: https://odd-random-words.trycloudflare.com/w/1234-cobalt-badger-orbit
+
+The link contains the code, so it is the secret: anyone holding it can download
+the files. The page lists every file, supports resuming an interrupted download
+(HTTP range requests), and offers a single `.zip` when there is more than one
+file. It stays up until you press Ctrl-C.
+
+`--web` implies `--direct`, and combines with `--tunnel` to reach someone on
+the other side of the internet. It serves on the same port as the rendezvous,
+so one tunnel covers both.
+
+**The caveat, plainly:** this path is not end to end encrypted, because a
+browser has no code to run the PAKE with. With `--direct` the bytes cross your
+LAN in the clear; with `--tunnel` the link is HTTPS, but Cloudflare terminates
+that TLS and could read the files. For end to end secrecy, use the normal
+`fsi send` / `fsi receive` pair. Because `--web` has no peer running the
+protocol, it does not also accept a CLI receiver — run a normal send for that.
+
 ## With a relay
 
     fsi relay --listen :9009         # raw TCP
@@ -92,6 +118,7 @@ or `https://` URL (WebSocket). `FSI_RELAY` sets the default.
     internal/crypt      authenticated encryption of every frame
     internal/comm       length-prefixed framing, TCP or WebSocket
     internal/ws         minimal RFC 6455 transport (stdlib only)
+    internal/web        browser download page for terminal-less recipients
     internal/relay      pairs two peers on a room, then pipes ciphertext
     internal/transfer   manifest, handshake, file streaming
 

@@ -9,11 +9,14 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/scotthellings/croc-go/internal/relay"
 	"github.com/scotthellings/croc-go/internal/transfer"
+	"github.com/scotthellings/croc-go/internal/web"
 	"github.com/scotthellings/croc-go/internal/words"
 	"github.com/scotthellings/croc-go/internal/ws"
 )
@@ -59,7 +62,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `fsi moves files between two computers, encrypted end to end.
 
 Usage:
-  fsi send [--relay ADDR] [--code CODE] [--direct] [--tunnel] <path>...
+  fsi send [--relay ADDR] [--code CODE] [--direct] [--tunnel] [--web] <path>...
   fsi receive [--relay ADDR] [--out DIR] [--yes] [--force] [CODE]
   fsi relay [--listen :9009] [--ws]
   fsi version
@@ -78,6 +81,10 @@ Without a relay:
             which works from anywhere. Needs cloudflared installed here. The
             hostname is random, so the receiver needs the printed --relay URL
             as well as the code.
+  --web     also serves a download page from this machine, so someone with
+            only a browser can fetch the files by opening the printed link.
+            That link is not end to end encrypted: with --tunnel, Cloudflare
+            terminates the TLS and can see the files.
 `)
 }
 
@@ -88,6 +95,7 @@ func runSend(args []string) error {
 	direct := fs.Bool("direct", false, "host the rendezvous in this process instead of using a relay")
 	listen := fs.String("listen", "", "address the hosted rendezvous listens on (with --direct or --tunnel)")
 	useTunnel := fs.Bool("tunnel", false, "publish the hosted rendezvous through a Cloudflare quick tunnel")
+	serveWeb := fs.Bool("web", false, "also serve a browser download page, for a recipient with no terminal")
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
@@ -95,6 +103,12 @@ func runSend(args []string) error {
 	}
 	if *code == "" {
 		*code = words.Generate()
+	}
+
+	// A download page has to be served from somewhere, and that somewhere is
+	// this process; there is no relay to put it on.
+	if *serveWeb {
+		*direct = true
 	}
 
 	// --tunnel implies hosting: there has to be something local to tunnel to,
@@ -112,9 +126,22 @@ func runSend(args []string) error {
 		}
 	}
 
+	bar := newProgress()
+
+	var page *web.Handler
+	if *serveWeb {
+		files, err := webFiles(fs.Args())
+		if err != nil {
+			return err
+		}
+		page = web.New(*code, files)
+		page.OnDownload = func(name string) { bar.status("browser downloaded " + name) }
+	}
+
 	peerAddr := *relayAddr
+	origin := ""
 	if *direct {
-		localURL, port, err := serve(*listen)
+		localURL, port, err := serve(*listen, page)
 		if err != nil {
 			return err
 		}
@@ -122,15 +149,25 @@ func runSend(args []string) error {
 		peerAddr = localURL
 
 		if *useTunnel {
-			publicURL, stop, err := tunnel(port)
+			publicOrigin, stop, err := tunnel(port)
 			if err != nil {
 				return err
 			}
 			defer stop()
-			peerAddr = publicURL
+			origin = publicOrigin
 		} else {
-			peerAddr = advertisedURL(port)
+			origin = advertisedOrigin(port)
 		}
+		peerAddr = origin + ws.DefaultPath
+	}
+
+	// --web serves files instead of streaming them to one peer, so the CLI
+	// receive command is not on offer: there is nobody running the protocol
+	// on this side to pair with.
+	if page != nil {
+		fmt.Printf("Send this link to whoever needs the files:\n\n    %s%s\n\n", httpOrigin(origin), page.Prefix())
+		fmt.Printf("The link carries the code, so treat it as the secret. Unlike a\nnormal fsi transfer it is not end to end encrypted%s.\n\n", tlsCaveat(*useTunnel))
+		return serveUntilInterrupt(bar)
 	}
 
 	if *direct {
@@ -139,7 +176,6 @@ func runSend(args []string) error {
 		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    fsi receive %s\n\n", *code, *code)
 	}
 
-	bar := newProgress()
 	return transfer.Send(transfer.SendOptions{
 		Relay:  *relayAddr,
 		Code:   *code,
@@ -147,6 +183,45 @@ func runSend(args []string) error {
 		Status: bar.status,
 		Report: bar.report,
 	})
+}
+
+// webFiles reuses the sender's manifest walk so a browser is offered exactly
+// the files a peer would have been, directory expansion and all.
+func webFiles(paths []string) ([]web.File, error) {
+	manifest, sources, err := transfer.BuildFileList(paths)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]web.File, len(manifest.Files))
+	for i, f := range manifest.Files {
+		files[i] = web.File{Name: f.Path, Source: sources[i], Size: f.Size}
+	}
+	return files, nil
+}
+
+// httpOrigin turns the relay's ws:// origin into the http:// one a browser
+// needs; a tunnel origin is already https.
+func httpOrigin(origin string) string {
+	return strings.Replace(origin, "ws://", "http://", 1)
+}
+
+func tlsCaveat(tunnelled bool) string {
+	if tunnelled {
+		return ": the link is HTTPS, but Cloudflare terminates it and could read the files"
+	}
+	return " and travels in the clear over this network"
+}
+
+// serveUntilInterrupt keeps the embedded server up for as long as the sender
+// leaves it up: a browser recipient may open the link at any point, and there
+// is no handshake that tells us they are done.
+func serveUntilInterrupt(bar *progress) error {
+	bar.status("serving the download page; press Ctrl-C when everyone has it")
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	<-sig
+	bar.status("stopped serving")
+	return nil
 }
 
 func runReceive(args []string) error {
@@ -204,20 +279,20 @@ func runRelay(args []string) error {
 	fs.Parse(args)
 	srv := relay.NewServer(log.New(os.Stderr, "", log.LstdFlags))
 	if *useWS {
-		return srv.ListenAndServeHTTP(*listen, nil)
+		return srv.ListenAndServeHTTP(*listen, nil, nil)
 	}
 	return srv.ListenAndServe(*listen)
 }
 
-// advertisedURL builds the URL a receiver on another machine should dial when
-// we host the rendezvous ourselves. The host part is a guess at best, so it is
-// printed for the human to correct rather than relied on.
-func advertisedURL(port int) string {
+// advertisedOrigin builds the origin a receiver on another machine should
+// reach us at when we host the rendezvous ourselves. The host part is a guess
+// at best, so it is printed for the human to correct rather than relied on.
+func advertisedOrigin(port int) string {
 	host := "127.0.0.1"
 	if ip := outboundIP(); ip != "" {
 		host = ip
 	}
-	return fmt.Sprintf("ws://%s%s", net.JoinHostPort(host, strconv.Itoa(port)), ws.DefaultPath)
+	return "ws://" + net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 // outboundIP asks the kernel which local address it would use to reach the
