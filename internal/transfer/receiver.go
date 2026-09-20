@@ -91,7 +91,7 @@ func receiveFile(c *comm.Conn, cipher *crypt.Cipher, dest string, info FileInfo,
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return 0, err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dest), ".croc-go-*")
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".fsi-*")
 	if err != nil {
 		return 0, err
 	}

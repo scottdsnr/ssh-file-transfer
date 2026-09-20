@@ -1,4 +1,4 @@
-// Package transfer implements the peer-to-peer half of a croc-go exchange:
+// Package transfer implements the peer-to-peer half of an fsi exchange:
 // authenticate with the PAKE, agree on a key, then move files as encrypted
 // frames over the relay.
 package transfer
@@ -30,8 +30,8 @@ const (
 
 // Control messages exchanged after the key is established.
 const (
-	confirmSender   = "croc-go sender ready"
-	confirmReceiver = "croc-go receiver ready"
+	confirmSender   = "fsi sender ready"
+	confirmReceiver = "fsi receiver ready"
 	answerAccept    = "accept"
 	answerReject    = "reject"
 )

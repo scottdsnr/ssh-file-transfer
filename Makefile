@@ -1,7 +1,7 @@
-# croc-go build tasks. Everything here is plain `go`; the Makefile just names
+# fsi build tasks. Everything here is plain `go`; the Makefile just names
 # the common combinations.
 
-BIN := bin/croc
+BIN := bin/fsi
 PREFIX ?= $(HOME)/.local
 
 .PHONY: all build test vet fmt smoke install clean
@@ -9,7 +9,7 @@ PREFIX ?= $(HOME)/.local
 all: build test
 
 build:
-	go build -o $(BIN) ./cmd/croc
+	go build -o $(BIN) ./cmd/fsi
 
 test: vet
 	go test ./...

@@ -1,4 +1,4 @@
-// Command croc-go sends and receives files between two machines, pairing them
+// Command fsi sends and receives files between two machines, pairing them
 // with a short spoken code and encrypting everything end to end.
 package main
 
@@ -18,7 +18,7 @@ import (
 	"github.com/scotthellings/croc-go/internal/ws"
 )
 
-// DefaultRelay is used when neither --relay nor CROC_GO_RELAY is set.
+// DefaultRelay is used when neither --relay nor FSI_RELAY is set.
 const DefaultRelay = "localhost:9009"
 
 // version is stamped in at build time by the release workflow.
@@ -43,7 +43,7 @@ func main() {
 		usage()
 		return
 	case "-v", "--version", "version":
-		fmt.Println("croc-go", version)
+		fmt.Println("fsi", version)
 		return
 	default:
 		usage()
@@ -56,13 +56,13 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `croc-go moves files between two computers, encrypted end to end.
+	fmt.Fprint(os.Stderr, `fsi moves files between two computers, encrypted end to end.
 
 Usage:
-  croc-go send [--relay ADDR] [--code CODE] [--direct] [--tunnel] <path>...
-  croc-go receive [--relay ADDR] [--out DIR] [--yes] [--force] [CODE]
-  croc-go relay [--listen :9009] [--ws]
-  croc-go version
+  fsi send [--relay ADDR] [--code CODE] [--direct] [--tunnel] <path>...
+  fsi receive [--relay ADDR] [--out DIR] [--yes] [--force] [CODE]
+  fsi relay [--listen :9009] [--ws]
+  fsi version
 
 The sender prints a code; type that same code on the receiver. The code is
 never sent over the network, so the relay cannot read your files.
@@ -134,9 +134,9 @@ func runSend(args []string) error {
 	}
 
 	if *direct {
-		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    croc-go receive --relay %s %s\n\n", *code, peerAddr, *code)
+		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    fsi receive --relay %s %s\n\n", *code, peerAddr, *code)
 	} else {
-		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    croc-go receive %s\n\n", *code, *code)
+		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    fsi receive %s\n\n", *code, *code)
 	}
 
 	bar := newProgress()
@@ -235,7 +235,7 @@ func outboundIP() string {
 }
 
 func defaultRelay() string {
-	if v := os.Getenv("CROC_GO_RELAY"); v != "" {
+	if v := os.Getenv("FSI_RELAY"); v != "" {
 		return v
 	}
 	return DefaultRelay

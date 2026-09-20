@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # One-step installer for people who just want to move a file. Downloads a
-# prebuilt croc binary, verifies its checksum, and puts it on the PATH. No Go
+# prebuilt fsi binary, verifies its checksum, and puts it on the PATH. No Go
 # toolchain, no compiler, no repository checkout.
 #
-#   curl -fsSL https://raw.githubusercontent.com/scottdsnr/ssh-file-transfer/master/scripts/get-croc.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/scottdsnr/ssh-file-transfer/master/scripts/get-fsi.sh | sh
 #
 # Options (as flags, or env vars when piping into sh):
-#   --version TAG       install a specific release       (CROC_VERSION)
-#   --prefix DIR        install under DIR/bin            (CROC_PREFIX)
-#   --with-cloudflared  also install cloudflared, for `croc send --tunnel`
+#   --version TAG       install a specific release       (FSI_VERSION)
+#   --prefix DIR        install under DIR/bin            (FSI_PREFIX)
+#   --with-cloudflared  also install cloudflared, for `fsi send --tunnel`
 #   --no-verify         skip checksum verification
 set -eu
 
-repo_slug="${CROC_REPO:-scottdsnr/ssh-file-transfer}"
-version="${CROC_VERSION:-latest}"
-prefix="${CROC_PREFIX:-$HOME/.local}"
+repo_slug="${FSI_REPO:-scottdsnr/ssh-file-transfer}"
+version="${FSI_VERSION:-latest}"
+prefix="${FSI_PREFIX:-$HOME/.local}"
 with_cloudflared=0
 verify=1
 
@@ -47,11 +47,11 @@ aarch64 | arm64) arch=arm64 ;;
 *) die "unsupported architecture $(uname -m). Build from source instead." ;;
 esac
 
-asset="croc_${os}-${arch}"
-binary="croc"
+asset="fsi_${os}-${arch}"
+binary="fsi"
 if [ "$os" = windows ]; then
 	asset="$asset.exe"
-	binary="croc.exe"
+	binary="fsi.exe"
 fi
 
 # GitHub serves /releases/latest/download/ for the newest release and
@@ -120,15 +120,15 @@ esac
 
 cat <<EOF
 
-croc is ready.
+fsi is ready.
 
 Send a file (nothing to set up, works over the internet if you have cloudflared):
 
-    croc send --tunnel myfile.zip
+    fsi send --tunnel myfile.zip
 
 On the same network, no cloudflared needed:
 
-    croc send --direct myfile.zip
+    fsi send --direct myfile.zip
 
-Either way croc prints one line to pass to the person receiving. They run it.
+Either way fsi prints one line to pass to the person receiving. They run it.
 EOF

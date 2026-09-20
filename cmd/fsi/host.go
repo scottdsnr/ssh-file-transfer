@@ -21,7 +21,7 @@ import (
 // peer, which keeps the pairing and encryption paths identical.
 func serve(listen string) (localURL string, port int, err error) {
 	logger := log.New(io.Discard, "", 0)
-	if os.Getenv("CROC_GO_DEBUG") != "" {
+	if os.Getenv("FSI_DEBUG") != "" {
 		logger = log.New(os.Stderr, "relay: ", log.LstdFlags)
 	}
 
@@ -77,7 +77,7 @@ func tunnel(port int) (publicURL string, stop func(), err error) {
 	found := make(chan string, 1)
 	go func() {
 		scanner := bufio.NewScanner(pipe)
-		debug := os.Getenv("CROC_GO_DEBUG") != ""
+		debug := os.Getenv("FSI_DEBUG") != ""
 		for scanner.Scan() {
 			line := scanner.Text()
 			if debug {

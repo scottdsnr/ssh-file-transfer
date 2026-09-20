@@ -5,9 +5,9 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-croc="${CROC:-$repo/bin/croc}"
-[ -x "$croc" ] || {
-	echo "build first: go build -o bin/croc ./cmd/croc" >&2
+fsi="${FSI:-$repo/bin/fsi}"
+[ -x "$fsi" ] || {
+	echo "build first: go build -o bin/fsi ./cmd/fsi" >&2
 	exit 1
 }
 
@@ -19,7 +19,7 @@ trap 'rm -rf "$work"; [ -n "${sender:-}" ] && kill "$sender" 2>/dev/null || true
 mkdir -p "$work/out"
 head -c 300000 /dev/urandom >"$work/payload.bin"
 
-"$croc" send --direct --listen "127.0.0.1:$port" --code "$code" "$work/payload.bin" >"$work/send.log" 2>&1 &
+"$fsi" send --direct --listen "127.0.0.1:$port" --code "$code" "$work/payload.bin" >"$work/send.log" 2>&1 &
 sender=$!
 
 # Wait for the hosted rendezvous to accept connections before receiving.
@@ -28,7 +28,7 @@ for _ in $(seq 50); do
 	sleep 0.1
 done
 
-"$croc" receive --relay "ws://127.0.0.1:$port/croc" --out "$work/out" --yes "$code" >"$work/recv.log" 2>&1
+"$fsi" receive --relay "ws://127.0.0.1:$port/fsi" --out "$work/out" --yes "$code" >"$work/recv.log" 2>&1
 
 wait "$sender" || {
 	echo "sender failed:" >&2

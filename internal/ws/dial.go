@@ -8,7 +8,7 @@ import (
 
 // DefaultPath is the endpoint the relay serves and clients dial when a URL
 // carries no path of its own.
-const DefaultPath = "/croc"
+const DefaultPath = "/fsi"
 
 // dialTCP opens the transport under the WebSocket handshake, adding TLS for
 // wss/https so a Cloudflare hostname works without extra configuration.

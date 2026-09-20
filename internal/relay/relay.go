@@ -19,7 +19,7 @@ import (
 
 // Protocol constants shared with clients.
 const (
-	Greeting    = "croc-go/1"
+	Greeting    = "fsi/1"
 	Paired      = "paired"
 	WaitTimeout = 10 * time.Minute
 )

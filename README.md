@@ -1,6 +1,6 @@
 # ssh-file-transfer
 
-`croc-go` moves files between two machines, paired by a short spoken code and
+`fsi` moves files between two machines, paired by a short spoken code and
 encrypted end to end (SPAKE2 over the code, ChaCha20-Poly1305 for the data).
 The code never crosses the network, so no rendezvous point can read the files.
 
@@ -8,12 +8,12 @@ The code never crosses the network, so no rendezvous point can read the files.
 
 No Go, no compiler, no checkout — grab a prebuilt binary:
 
-    curl -fsSL https://raw.githubusercontent.com/scottdsnr/ssh-file-transfer/master/scripts/get-croc.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/scottdsnr/ssh-file-transfer/master/scripts/get-fsi.sh | sh
 
 Add `-s -- --with-cloudflared` to also install cloudflared, which is what lets
-`croc send --tunnel` work from anywhere:
+`fsi send --tunnel` work from anywhere:
 
-    curl -fsSL .../get-croc.sh | sh -s -- --with-cloudflared
+    curl -fsSL .../get-fsi.sh | sh -s -- --with-cloudflared
 
 It detects your OS and CPU (Linux, macOS and Windows; x86-64 and arm64),
 verifies the published SHA-256, and installs to `~/.local/bin`. Use
@@ -23,10 +23,10 @@ Binaries are also downloadable by hand from the
 
 Then send something:
 
-    croc send --tunnel myfile.zip     # works over the internet
-    croc send --direct myfile.zip     # same network only, no cloudflared
+    fsi send --tunnel myfile.zip     # works over the internet
+    fsi send --direct myfile.zip     # same network only, no cloudflared
 
-croc prints one command line; the other person runs it. That's the whole flow.
+fsi prints one command line; the other person runs it. That's the whole flow.
 
 ## Requirements (building from source)
 
@@ -44,7 +44,7 @@ croc prints one command line; the other person runs it. That's the whole flow.
 
 Or by hand:
 
-    go build -o bin/croc ./cmd/croc
+    go build -o bin/fsi ./cmd/fsi
 
 ## Test
 
@@ -60,13 +60,13 @@ rendezvous in a sending process and receives from another over loopback.
 is involved. The receiver must be able to reach the sender: LAN, VPN
 (Tailscale/WireGuard), or a forwarded port.
 
-    croc send --direct big.bin
-    # prints: croc receive --relay ws://192.168.1.20:9019/croc <code>
+    fsi send --direct big.bin
+    # prints: fsi receive --relay ws://192.168.1.20:9019/fsi <code>
 
 **Cloudflare quick tunnel** — same, but published to the internet.
 
-    croc send --tunnel big.bin
-    # prints: croc receive --relay https://odd-random-words.trycloudflare.com/croc <code>
+    fsi send --tunnel big.bin
+    # prints: fsi receive --relay https://odd-random-words.trycloudflare.com/fsi <code>
 
 Requires `cloudflared` on the sending machine only; no Cloudflare account. The
 tunnel hostname is random, so the receiver needs the printed `--relay` URL in
@@ -75,14 +75,14 @@ Cloudflare offers quick tunnels with no uptime guarantee.
 
 ## With a relay
 
-    croc relay --listen :9009         # raw TCP
-    croc relay --listen :8080 --ws    # WebSocket, for putting it behind a proxy
+    fsi relay --listen :9009         # raw TCP
+    fsi relay --listen :8080 --ws    # WebSocket, for putting it behind a proxy
 
-    croc send --relay host:9009 big.bin
-    croc receive --relay host:9009 <code>
+    fsi send --relay host:9009 big.bin
+    fsi receive --relay host:9009 <code>
 
 `--relay` takes either `host:port` (raw TCP) or a `ws://`, `wss://`, `http://`
-or `https://` URL (WebSocket). `CROC_GO_RELAY` sets the default.
+or `https://` URL (WebSocket). `FSI_RELAY` sets the default.
 
 ## Layout
 
@@ -95,4 +95,4 @@ or `https://` URL (WebSocket). `CROC_GO_RELAY` sets the default.
     internal/relay      pairs two peers on a room, then pipes ciphertext
     internal/transfer   manifest, handshake, file streaming
 
-Set `CROC_GO_DEBUG=1` to see relay and cloudflared logs on the sender.
+Set `FSI_DEBUG=1` to see relay and cloudflared logs on the sender.

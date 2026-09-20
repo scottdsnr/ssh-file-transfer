@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build croc-go, run its tests, and optionally install the tools it needs.
+# Build fsi, run its tests, and optionally install the tools it needs.
 #
 #   ./scripts/install.sh                     build + test + install to ~/.local/bin
 #   ./scripts/install.sh --with-cloudflared  also install cloudflared (for --tunnel)
@@ -48,7 +48,7 @@ platform() {
 	case "$(uname -s)" in
 	Linux) os=linux ;;
 	Darwin) os=darwin ;;
-	*) die "unsupported OS $(uname -s); build manually with: go build ./cmd/croc" ;;
+	*) die "unsupported OS $(uname -s); build manually with: go build ./cmd/fsi" ;;
 	esac
 	case "$(uname -m)" in
 	x86_64 | amd64) arch=amd64 ;;
@@ -128,7 +128,7 @@ ensure_go
 
 say "building"
 mkdir -p "$repo/bin"
-(cd "$repo" && go build -o "$repo/bin/croc" ./cmd/croc)
+(cd "$repo" && go build -o "$repo/bin/fsi" ./cmd/fsi)
 
 if [ "$run_tests" = 1 ]; then
 	say "vetting"
@@ -137,9 +137,9 @@ if [ "$run_tests" = 1 ]; then
 	(cd "$repo" && go test ./...)
 fi
 
-say "installing to $prefix/bin/croc"
+say "installing to $prefix/bin/fsi"
 mkdir -p "$prefix/bin"
-install -m 0755 "$repo/bin/croc" "$prefix/bin/croc"
+install -m 0755 "$repo/bin/fsi" "$prefix/bin/fsi"
 
 case ":$PATH:" in
 *":$prefix/bin:"*) ;;
@@ -150,10 +150,10 @@ cat <<EOF
 
 Done. Try a transfer against yourself:
 
-    croc send --direct --listen 127.0.0.1:9019 ./README.md
-    croc receive --relay ws://127.0.0.1:9019/croc --out /tmp <code>
+    fsi send --direct --listen 127.0.0.1:9019 ./README.md
+    fsi receive --relay ws://127.0.0.1:9019/fsi --out /tmp <code>
 
 Over the internet with no relay (needs cloudflared):
 
-    croc send --tunnel ./README.md
+    fsi send --tunnel ./README.md
 EOF
