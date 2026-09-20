@@ -4,9 +4,31 @@
 encrypted end to end (SPAKE2 over the code, ChaCha20-Poly1305 for the data).
 The code never crosses the network, so no rendezvous point can read the files.
 
+## Requirements
+
+- Go 1.27.1 or newer (the only build dependency; the code itself uses just the
+  standard library plus `golang.org/x/crypto`).
+- `cloudflared`, on the sending machine only, and only for `--tunnel`. No
+  Cloudflare account needed.
+
 ## Install
 
-    go build -o croc ./cmd/croc
+    ./scripts/install.sh                     # build, test, install to ~/.local/bin
+    ./scripts/install.sh --with-cloudflared  # also fetch cloudflared, for --tunnel
+    ./scripts/install.sh --with-go           # also fetch the Go toolchain if missing
+    ./scripts/install.sh --prefix /usr/local # install somewhere else
+
+Or by hand:
+
+    go build -o bin/croc ./cmd/croc
+
+## Test
+
+    make test    # go vet + go test ./...
+    make smoke   # a real 300 KB transfer between two processes, no relay
+
+`make smoke` is the one that proves the serverless path end to end: it hosts the
+rendezvous in a sending process and receives from another over loopback.
 
 ## Serverless: no public relay
 
