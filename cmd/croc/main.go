@@ -7,12 +7,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/scotthellings/croc-go/internal/relay"
 	"github.com/scotthellings/croc-go/internal/transfer"
 	"github.com/scotthellings/croc-go/internal/words"
+	"github.com/scotthellings/croc-go/internal/ws"
 )
 
 // DefaultRelay is used when neither --relay nor CROC_GO_RELAY is set.
@@ -50,12 +53,24 @@ func usage() {
 	fmt.Fprint(os.Stderr, `croc-go moves files between two computers, encrypted end to end.
 
 Usage:
-  croc-go send [--relay host:port] [--code CODE] <path>...
-  croc-go receive [--relay host:port] [--out DIR] [--yes] [--force] [CODE]
-  croc-go relay [--listen :9009]
+  croc-go send [--relay ADDR] [--code CODE] [--direct] [--tunnel] <path>...
+  croc-go receive [--relay ADDR] [--out DIR] [--yes] [--force] [CODE]
+  croc-go relay [--listen :9009] [--ws]
 
 The sender prints a code; type that same code on the receiver. The code is
 never sent over the network, so the relay cannot read your files.
+
+ADDR is either host:port for a raw TCP relay or a ws://, wss://, http:// or
+https:// URL for a relay reached over WebSocket.
+
+Without a relay:
+  --direct  hosts the rendezvous in the sending process, so nothing but the
+            two peers is involved. Needs the receiver to be able to reach
+            this machine: a LAN, a VPN, or a forwarded port.
+  --tunnel  does the same but publishes it through a Cloudflare quick tunnel,
+            which works from anywhere. Needs cloudflared installed here. The
+            hostname is random, so the receiver needs the printed --relay URL
+            as well as the code.
 `)
 }
 
@@ -63,6 +78,9 @@ func runSend(args []string) error {
 	fs := flag.NewFlagSet("send", flag.ExitOnError)
 	relayAddr := fs.String("relay", defaultRelay(), "relay server address")
 	code := fs.String("code", "", "transfer code (generated when omitted)")
+	direct := fs.Bool("direct", false, "host the rendezvous in this process instead of using a relay")
+	listen := fs.String("listen", "", "address the hosted rendezvous listens on (with --direct or --tunnel)")
+	useTunnel := fs.Bool("tunnel", false, "publish the hosted rendezvous through a Cloudflare quick tunnel")
 	fs.Parse(args)
 
 	if fs.NArg() == 0 {
@@ -72,7 +90,47 @@ func runSend(args []string) error {
 		*code = words.Generate()
 	}
 
-	fmt.Printf("Code is: %s\nOn the other machine run:\n\n    croc-go receive %s\n\n", *code, *code)
+	// --tunnel implies hosting: there has to be something local to tunnel to,
+	// and the port is Cloudflare's business rather than the receiver's.
+	if *useTunnel {
+		*direct = true
+	}
+	if *listen == "" {
+		// A tunnel reaches the relay from localhost, so let the kernel pick
+		// the port; a direct transfer needs a port the receiver can predict.
+		if *useTunnel {
+			*listen = "127.0.0.1:0"
+		} else {
+			*listen = ":9009"
+		}
+	}
+
+	peerAddr := *relayAddr
+	if *direct {
+		localURL, port, err := serve(*listen)
+		if err != nil {
+			return err
+		}
+		*relayAddr = localURL
+		peerAddr = localURL
+
+		if *useTunnel {
+			publicURL, stop, err := tunnel(port)
+			if err != nil {
+				return err
+			}
+			defer stop()
+			peerAddr = publicURL
+		} else {
+			peerAddr = advertisedURL(port)
+		}
+	}
+
+	if *direct {
+		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    croc-go receive --relay %s %s\n\n", *code, peerAddr, *code)
+	} else {
+		fmt.Printf("Code is: %s\nOn the other machine run:\n\n    croc-go receive %s\n\n", *code, *code)
+	}
 
 	bar := newProgress()
 	return transfer.Send(transfer.SendOptions{
@@ -135,8 +193,38 @@ func confirmFunc(auto bool) func(transfer.Manifest) bool {
 func runRelay(args []string) error {
 	fs := flag.NewFlagSet("relay", flag.ExitOnError)
 	listen := fs.String("listen", ":9009", "address to listen on")
+	useWS := fs.Bool("ws", false, "serve WebSockets over HTTP instead of raw TCP")
 	fs.Parse(args)
-	return relay.NewServer(log.New(os.Stderr, "", log.LstdFlags)).ListenAndServe(*listen)
+	srv := relay.NewServer(log.New(os.Stderr, "", log.LstdFlags))
+	if *useWS {
+		return srv.ListenAndServeHTTP(*listen, nil)
+	}
+	return srv.ListenAndServe(*listen)
+}
+
+// advertisedURL builds the URL a receiver on another machine should dial when
+// we host the rendezvous ourselves. The host part is a guess at best, so it is
+// printed for the human to correct rather than relied on.
+func advertisedURL(port int) string {
+	host := "127.0.0.1"
+	if ip := outboundIP(); ip != "" {
+		host = ip
+	}
+	return fmt.Sprintf("ws://%s%s", net.JoinHostPort(host, strconv.Itoa(port)), ws.DefaultPath)
+}
+
+// outboundIP asks the kernel which local address it would use to reach the
+// internet, which is the closest thing to "my address on this network".
+func outboundIP() string {
+	c, err := net.Dial("udp", "203.0.113.1:9")
+	if err != nil {
+		return ""
+	}
+	defer c.Close()
+	if addr, ok := c.LocalAddr().(*net.UDPAddr); ok {
+		return addr.IP.String()
+	}
+	return ""
 }
 
 func defaultRelay() string {

@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
+
+	"github.com/scotthellings/croc-go/internal/ws"
 )
 
 // MaxMessage bounds a single frame, keeping a hostile peer from making us
@@ -22,13 +25,33 @@ type Conn struct {
 
 func New(c net.Conn) *Conn { return &Conn{Conn: c} }
 
-// Dial connects to addr and wraps the connection.
+// Dial connects to addr and wraps the connection. A bare host:port is dialed
+// as raw TCP; a ws/wss/http/https URL is dialed as a WebSocket, which is what
+// lets a transfer pass through an HTTP-only tunnel.
 func Dial(addr string, timeout time.Duration) (*Conn, error) {
+	if isURL(addr) {
+		c, err := ws.Dial(addr, timeout)
+		if err != nil {
+			return nil, err
+		}
+		return New(c), nil
+	}
 	c, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, err
 	}
 	return New(c), nil
+}
+
+// isURL reports whether addr names a WebSocket endpoint rather than a TCP
+// host:port.
+func isURL(addr string) bool {
+	for _, scheme := range []string{"ws://", "wss://", "http://", "https://"} {
+		if strings.HasPrefix(addr, scheme) {
+			return true
+		}
+	}
+	return false
 }
 
 // Send writes one frame.

@@ -9,10 +9,12 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/scotthellings/croc-go/internal/comm"
+	"github.com/scotthellings/croc-go/internal/ws"
 )
 
 // Protocol constants shared with clients.
@@ -142,4 +144,40 @@ func pipe(a, b net.Conn) {
 	go copyOnce(a, b)
 	go copyOnce(b, a)
 	wg.Wait()
+}
+
+// ServeHTTP pairs peers that arrive over WebSocket instead of raw TCP. This is
+// what makes an HTTP-only tunnel (a Cloudflare quick tunnel, say) usable as
+// the rendezvous point: the tunnel proxies plain HTTP, and the upgrade rides
+// through it untouched.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != ws.DefaultPath {
+		http.NotFound(w, r)
+		return
+	}
+	c, err := ws.Accept(w, r)
+	if err != nil {
+		s.log.Printf("rejected %s: %v", r.RemoteAddr, err)
+		return
+	}
+	s.handle(comm.New(c))
+}
+
+// ListenAndServeHTTP runs the WebSocket flavour of the relay. The returned
+// listener address is reported through ready, which lets a caller that asked
+// for port 0 learn the port that was actually chosen.
+func (s *Server) ListenAndServeHTTP(addr string, ready func(net.Addr)) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	s.log.Printf("relay listening for websockets on %s", ln.Addr())
+	if ready != nil {
+		ready(ln.Addr())
+	}
+	// Transfers are long-lived and idle while a peer waits for its partner,
+	// so the default timeouts would cut rooms off mid-wait.
+	srv := &http.Server{Handler: s}
+	return srv.Serve(ln)
 }
